@@ -10,6 +10,10 @@ import threading
 import uuid
 import time
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Import AI service clients
 from services.openai_service import OpenAIService
@@ -47,6 +51,7 @@ processed_datasets = {}
 # Queue management
 active_queues = {}
 queue_lock = threading.Lock()
+cancelled_queues = set()  # Track cancelled queue IDs
 
 # Create necessary directories
 os.makedirs('logs', exist_ok=True)
@@ -57,15 +62,15 @@ os.makedirs('data/results', exist_ok=True)
 
 # Prompt templates for summarization
 PROMPT_TEMPLATES = {
-    "direct": "Summarize the following text:\n\n{text}\n\nSummary:",
+    "direct": "Summarize the following text within 350 letters:\n\n{text}\n\nSummary:",
     
-    "minimal_details": """Please provide a concise summary of the following text. Focus on the main points and key information.
+    "minimal_details": """Please provide a concise summary of the following text 350 letters. Focus on the main points and key information.
 
 Text: {text}
 
 Summary:""",
     
-    "analytical_details": """Analyze the following text and provide a comprehensive summary that captures:
+    "analytical_details": """Analyze the following text and provide a summary 350 letters that captures:
 1. Main topic and key points
 2. Important details and context
 3. Conclusions or outcomes mentioned
@@ -215,6 +220,14 @@ def summarization_worker(queue_id: str, samples_file: str, service: str, batch_s
     try:
         logger.info(f"Starting summarization worker for queue {queue_id}")
         
+        # Check if cancelled before starting
+        if queue_id in cancelled_queues:
+            update_queue_progress(queue_id, {
+                'status': 'cancelled',
+                'cancelled_at': datetime.now().isoformat()
+            })
+            return
+        
         # Load samples
         df = pd.read_csv(samples_file)
         total_samples = len(df)
@@ -245,6 +258,18 @@ def summarization_worker(queue_id: str, samples_file: str, service: str, batch_s
         
         # Process samples
         for i in range(start_idx, total_samples, batch_size):
+            # Check for cancellation at the start of each batch
+            if queue_id in cancelled_queues:
+                logger.info(f"Queue {queue_id} cancelled during processing at batch {i // batch_size}")
+                update_queue_progress(queue_id, {
+                    'status': 'cancelled',
+                    'processed_samples': processed_count,
+                    'progress_percentage': (processed_count / total_samples) * 100,
+                    'last_batch_completed': (i // batch_size) - 1,
+                    'cancelled_at': datetime.now().isoformat()
+                })
+                return
+            
             batch_end = min(i + batch_size, total_samples)
             batch_num = i // batch_size
             
@@ -261,6 +286,18 @@ def summarization_worker(queue_id: str, samples_file: str, service: str, batch_s
             
             # Process batch
             for idx in range(i, batch_end):
+                # Check for cancellation during sample processing
+                if queue_id in cancelled_queues:
+                    logger.info(f"Queue {queue_id} cancelled during sample {idx}")
+                    update_queue_progress(queue_id, {
+                        'status': 'cancelled',
+                        'processed_samples': processed_count,
+                        'progress_percentage': (processed_count / total_samples) * 100,
+                        'last_batch_completed': batch_num - 1 if processed_count > 0 else 0,
+                        'cancelled_at': datetime.now().isoformat()
+                    })
+                    return
+                
                 row = df.iloc[idx]
                 
                 # Generate summary
@@ -308,17 +345,18 @@ def summarization_worker(queue_id: str, samples_file: str, service: str, batch_s
                 'last_batch_completed': batch_num
             })
         
-        # Mark as completed
-        update_queue_progress(queue_id, {
-            'status': 'completed',
-            'processed_samples': processed_count,
-            'total_samples': total_samples,
-            'progress_percentage': 100.0,
-            'completed_at': datetime.now().isoformat(),
-            'results_file': f"results_{queue_id}.json"
-        })
-        
-        logger.info(f"Summarization completed for queue {queue_id}")
+        # Mark as completed (only if not cancelled)
+        if queue_id not in cancelled_queues:
+            update_queue_progress(queue_id, {
+                'status': 'completed',
+                'processed_samples': processed_count,
+                'total_samples': total_samples,
+                'progress_percentage': 100.0,
+                'completed_at': datetime.now().isoformat(),
+                'results_file': f"results_{queue_id}.json"
+            })
+            
+            logger.info(f"Summarization completed for queue {queue_id}")
         
     except Exception as e:
         logger.error(f"Error in summarization worker {queue_id}: {str(e)}")
@@ -327,6 +365,10 @@ def summarization_worker(queue_id: str, samples_file: str, service: str, batch_s
             'error': str(e),
             'failed_at': datetime.now().isoformat()
         })
+    finally:
+        # Clean up cancelled queue from tracking set
+        if queue_id in cancelled_queues:
+            cancelled_queues.discard(queue_id)
 
 @app.route('/')
 def home():
@@ -344,6 +386,7 @@ def home():
             "save_sample": "POST /api/save_sample",
             "summarize": "POST /api/summarize",
             "show_progress": "GET /api/show_progress/<queue_id>",
+            "stop_queue": "POST /api/stop_queue/<queue_id>",
             "list_queues": "GET /api/list_queues",
             "generate_summaries": "POST /api/generate-summaries",
             "batch_process": "POST /api/batch-process",
@@ -1009,6 +1052,85 @@ def list_queues():
         
     except Exception as e:
         logger.error(f"Error listing queues: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/stop_queue/<queue_id>', methods=['POST'])
+def stop_queue(queue_id: str):
+    """Stop/cancel a running queue"""
+    try:
+        # Check if queue exists
+        queue_data = None
+        
+        # First check active queues
+        with queue_lock:
+            if queue_id in active_queues:
+                queue_data = active_queues[queue_id].copy()
+            else:
+                # Load from file
+                queue_data = load_queue_state(queue_id)
+        
+        if not queue_data:
+            return jsonify({"error": f"Queue {queue_id} not found"}), 404
+        
+        current_status = queue_data.get('status', 'unknown')
+        
+        # Check if queue can be cancelled
+        if current_status in ['completed', 'error', 'cancelled']:
+            return jsonify({
+                "error": f"Cannot stop queue {queue_id}. Current status: {current_status}",
+                "current_status": current_status
+            }), 400
+        
+        # Add to cancelled queues set
+        cancelled_queues.add(queue_id)
+        
+        # Update queue status
+        if current_status in ['queued', 'started']:
+            # If not yet processing, mark as cancelled immediately
+            update_queue_progress(queue_id, {
+                'status': 'cancelled',
+                'cancelled_at': datetime.now().isoformat(),
+                'cancellation_reason': 'User requested cancellation'
+            })
+            
+            # Remove from active queues if present
+            with queue_lock:
+                if queue_id in active_queues:
+                    del active_queues[queue_id]
+            
+            logger.info(f"Queue {queue_id} cancelled immediately (status: {current_status})")
+            
+            return jsonify({
+                "status": "success",
+                "message": f"Queue {queue_id} cancelled successfully",
+                "queue_id": queue_id,
+                "previous_status": current_status,
+                "new_status": "cancelled",
+                "cancelled_at": datetime.now().isoformat()
+            })
+        
+        elif current_status == 'processing':
+            # If currently processing, mark for cancellation (worker will handle it)
+            logger.info(f"Queue {queue_id} marked for cancellation (currently processing)")
+            
+            return jsonify({
+                "status": "success",
+                "message": f"Queue {queue_id} marked for cancellation. It will stop after the current batch.",
+                "queue_id": queue_id,
+                "previous_status": current_status,
+                "note": "The queue will stop gracefully after completing the current batch",
+                "cancellation_requested_at": datetime.now().isoformat()
+            })
+        
+        else:
+            return jsonify({
+                "error": f"Unknown queue status: {current_status}",
+                "queue_id": queue_id,
+                "current_status": current_status
+            }), 400
+        
+    except Exception as e:
+        logger.error(f"Error stopping queue {queue_id}: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.errorhandler(404)

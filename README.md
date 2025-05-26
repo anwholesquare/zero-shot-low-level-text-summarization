@@ -227,6 +227,44 @@ Monitor the progress of a summarization queue.
 }
 ```
 
+#### Stop Queue
+```
+POST /api/stop_queue/<queue_id>
+```
+Stop/cancel a running or queued summarization process.
+
+**Response (Immediate cancellation):**
+```json
+{
+  "status": "success",
+  "message": "Queue a1b2c3d4 cancelled successfully",
+  "queue_id": "a1b2c3d4",
+  "previous_status": "queued",
+  "new_status": "cancelled",
+  "cancelled_at": "2024-01-15T10:45:00"
+}
+```
+
+**Response (Graceful cancellation during processing):**
+```json
+{
+  "status": "success",
+  "message": "Queue a1b2c3d4 marked for cancellation. It will stop after the current batch.",
+  "queue_id": "a1b2c3d4",
+  "previous_status": "processing",
+  "note": "The queue will stop gracefully after completing the current batch",
+  "cancellation_requested_at": "2024-01-15T10:45:00"
+}
+```
+
+**Error Response:**
+```json
+{
+  "error": "Cannot stop queue a1b2c3d4. Current status: completed",
+  "current_status": "completed"
+}
+```
+
 #### List All Queues
 ```
 GET /api/list_queues
@@ -457,6 +495,53 @@ if status == 'error':
     print(f"Resumed with new queue: {new_queue_id}")
 ```
 
+### Queue Stopping Example
+
+```python
+import requests
+import time
+
+BASE_URL = "http://localhost:5000"
+
+# Start a queue
+response = requests.post(f"{BASE_URL}/api/summarize", json={
+    "lang": "bengali",
+    "service": "openai",
+    "batch_size": 10,
+    "prompt_type": "direct"
+})
+
+queue_id = response.json()['queue_id']
+print(f"Started queue: {queue_id}")
+
+# Monitor for a while
+for i in range(5):
+    response = requests.get(f"{BASE_URL}/api/show_progress/{queue_id}")
+    progress = response.json()['queue_data']
+    
+    print(f"Status: {progress['status']}, Progress: {progress.get('progress_percentage', 0):.1f}%")
+    
+    if progress['status'] == 'processing':
+        break
+    time.sleep(2)
+
+# Stop the queue
+print(f"Stopping queue {queue_id}...")
+response = requests.post(f"{BASE_URL}/api/stop_queue/{queue_id}")
+
+if response.status_code == 200:
+    result = response.json()
+    print(f"✅ {result['message']}")
+    
+    # Check final status
+    time.sleep(2)
+    response = requests.get(f"{BASE_URL}/api/show_progress/{queue_id}")
+    final_status = response.json()['queue_data']['status']
+    print(f"Final status: {final_status}")
+else:
+    print(f"❌ Failed to stop: {response.json()}")
+```
+
 ### Batch Processing Multiple Languages
 
 ```python
@@ -670,6 +755,7 @@ This API is designed for:
 - **started**: Worker thread started
 - **processing**: Actively processing samples
 - **completed**: All samples processed successfully
+- **cancelled**: Queue stopped by user request
 - **error**: Processing failed with error
 
 ### Resume Functionality
