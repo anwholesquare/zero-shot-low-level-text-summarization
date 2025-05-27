@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 import os
 import pandas as pd
 import random
@@ -11,6 +11,9 @@ import uuid
 import time
 from pathlib import Path
 from dotenv import load_dotenv
+import zipfile
+import tempfile
+import shutil
 
 # Load environment variables from .env file
 load_dotenv()
@@ -130,37 +133,60 @@ def sample_dataset(dataset, sample_size=2000, random_seed=42):
     
     return sampled_dataset
 
-def calculate_metrics(generated_summary: str, reference_summary: str) -> Dict[str, float]:
-    """Calculate ROUGE-1, BLEU, and BERTScore metrics"""
+def calculate_metrics(generated_summary: str, reference_summary: str, language: str = "en") -> Dict[str, float]:
+    """Calculate ROUGE-1, BLEU, and BERTScore metrics with language-specific settings"""
     if not METRICS_AVAILABLE:
         return {"rouge1": 0.0, "bleu": 0.0, "bertscore": 0.0}
+    
+    # Language mapping for BERTScore
+    bertscore_lang_map = {
+        "bengali": "bn",
+        "nepali": "ne", 
+        "burmese": "my",
+        "sinhala": "si",
+        "english": "en"
+    }
+    
+    # Get BERTScore language code
+    bert_lang = bertscore_lang_map.get(language.lower(), "en")
     
     metrics = {}
     
     try:
-        # ROUGE-1 score only
-        scorer = rouge_scorer.RougeScorer(['rouge1'], use_stemmer=True)
+        # ROUGE-1 score - works for most languages with proper tokenization
+        scorer = rouge_scorer.RougeScorer(['rouge1'], use_stemmer=False)  # Disable stemming for non-English
         rouge_scores = scorer.score(reference_summary, generated_summary)
         
         metrics['rouge1'] = rouge_scores['rouge1'].fmeasure
         
-        # BLEU score
+        # BLEU score - language agnostic but benefits from proper tokenization
         smoothie = SmoothingFunction().method4
         reference_tokens = [reference_summary.split()]
         generated_tokens = generated_summary.split()
         bleu_score = sentence_bleu(reference_tokens, generated_tokens, smoothing_function=smoothie)
         metrics['bleu'] = bleu_score
         
-        # BERTScore
+        # BERTScore with language-specific models
         try:
-            P, R, F1 = bert_score([generated_summary], [reference_summary], lang="en", verbose=False)
+            logger.info(f"Calculating BERTScore for language: {language} (code: {bert_lang})")
+            P, R, F1 = bert_score([generated_summary], [reference_summary], lang=bert_lang, verbose=False)
             metrics['bertscore'] = F1.item()  # Use F1 score as the main BERTScore metric
         except Exception as bert_error:
-            logger.warning(f"BERTScore calculation failed: {str(bert_error)}")
-            metrics['bertscore'] = 0.0
+            logger.warning(f"BERTScore calculation failed for {language}: {str(bert_error)}")
+            # Fallback to English if language-specific model fails
+            if bert_lang != "en":
+                try:
+                    logger.info(f"Falling back to English BERTScore for {language}")
+                    P, R, F1 = bert_score([generated_summary], [reference_summary], lang="en", verbose=False)
+                    metrics['bertscore'] = F1.item()
+                except Exception as fallback_error:
+                    logger.warning(f"English BERTScore fallback also failed: {str(fallback_error)}")
+                    metrics['bertscore'] = 0.0
+            else:
+                metrics['bertscore'] = 0.0
         
     except Exception as e:
-        logger.error(f"Error calculating metrics: {str(e)}")
+        logger.error(f"Error calculating metrics for {language}: {str(e)}")
         metrics = {"rouge1": 0.0, "bleu": 0.0, "bertscore": 0.0}
     
     return metrics
@@ -306,7 +332,7 @@ def summarization_worker(queue_id: str, samples_file: str, service: str, batch_s
                 )
                 
                 # Calculate metrics
-                metrics = calculate_metrics(generated_summary, row['summary'])
+                metrics = calculate_metrics(generated_summary, row['summary'], row['language'])
                 
                 # Create result
                 result = {
@@ -391,7 +417,8 @@ def home():
             "generate_summaries": "POST /api/generate-summaries",
             "batch_process": "POST /api/batch-process",
             "export_csv": "POST /api/export-csv",
-            "dataset_info": "GET /api/dataset-info"
+            "dataset_info": "GET /api/dataset-info",
+            "download": "GET /download"
         }
     })
 
@@ -531,7 +558,7 @@ def generate_summaries():
             )
             
             # Calculate metrics
-            metrics = calculate_metrics(generated_summary, item['summary'])
+            metrics = calculate_metrics(generated_summary, item['summary'], language)
             
             # Create result record
             result = {
@@ -593,7 +620,7 @@ def batch_process():
                 )
                 
                 # Calculate metrics
-                metrics = calculate_metrics(generated_summary, item['summary'])
+                metrics = calculate_metrics(generated_summary, item['summary'], language)
                 
                 # Create result record
                 result = {
@@ -1132,6 +1159,70 @@ def stop_queue(queue_id: str):
     except Exception as e:
         logger.error(f"Error stopping queue {queue_id}: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/download', methods=['GET'])
+def download_data():
+    """Download all files from the data folder as a zip file"""
+    try:
+        data_dir = Path("data")
+        
+        # Check if data directory exists
+        if not data_dir.exists():
+            return jsonify({"error": "Data directory not found"}), 404
+        
+        # Check if data directory has any files
+        all_files = []
+        for root, dirs, files in os.walk(data_dir):
+            for file in files:
+                all_files.append(os.path.join(root, file))
+        
+        if not all_files:
+            return jsonify({"error": "No files found in data directory"}), 404
+        
+        # Create a temporary zip file
+        temp_dir = tempfile.mkdtemp()
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        zip_filename = f"xlsum_data_{timestamp}.zip"
+        zip_path = os.path.join(temp_dir, zip_filename)
+        
+        logger.info(f"Creating zip file: {zip_path}")
+        
+        # Create zip file
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in all_files:
+                # Get relative path from data directory
+                relative_path = os.path.relpath(file_path, start=".")
+                zipf.write(file_path, relative_path)
+                logger.debug(f"Added to zip: {relative_path}")
+        
+        # Get zip file size for logging
+        zip_size = os.path.getsize(zip_path)
+        logger.info(f"Zip file created successfully: {zip_filename} ({zip_size} bytes)")
+        
+        # Send the file and clean up after
+        def remove_temp_file():
+            """Clean up temporary files after sending"""
+            try:
+                time.sleep(1)  # Give time for file to be sent
+                shutil.rmtree(temp_dir)
+                logger.info(f"Cleaned up temporary directory: {temp_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temporary directory: {str(e)}")
+        
+        # Schedule cleanup in background
+        cleanup_thread = threading.Thread(target=remove_temp_file, daemon=True)
+        cleanup_thread.start()
+        
+        return send_file(
+            zip_path,
+            as_attachment=True,
+            download_name=zip_filename,
+            mimetype='application/zip'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error creating download zip: {str(e)}")
+        return jsonify({"error": f"Failed to create download: {str(e)}"}), 500
 
 @app.errorhandler(404)
 def not_found(error):

@@ -646,11 +646,32 @@ print(f"CSV exported: {csv_response.json()['csv_file']}")
 
 ## Evaluation Metrics
 
-The API automatically calculates the following metrics for each generated summary:
+The API automatically calculates the following metrics for each generated summary with **language-specific support**:
 
-- **ROUGE-1**: Unigram overlap between generated and reference summaries
-- **BLEU**: Bilingual evaluation understudy score
-- **BERTScore**: Contextual embeddings-based evaluation using BERT
+- **ROUGE-1**: Unigram overlap between generated and reference summaries (language-agnostic with proper tokenization)
+- **BLEU**: Bilingual evaluation understudy score (language-agnostic)
+- **BERTScore**: Contextual embeddings-based evaluation using language-specific BERT models
+
+### Language-Specific BERTScore
+
+The system uses appropriate BERT models for each supported language:
+
+| Language | BERTScore Code | Model Used |
+|----------|----------------|------------|
+| Bengali  | `bn` | Bengali BERT model |
+| Nepali   | `ne` | Nepali BERT model |
+| Burmese  | `my` | Burmese BERT model |
+| Sinhala  | `si` | Sinhala BERT model |
+| English  | `en` | English BERT model (fallback) |
+
+**Fallback Mechanism**: If a language-specific BERT model is not available or fails to load, the system automatically falls back to the English BERT model to ensure metrics are always calculated.
+
+### Metrics Calculation Features
+
+- **Automatic Language Detection**: Metrics are calculated using the appropriate language model based on the dataset language
+- **Robust Error Handling**: Graceful fallback to English models if language-specific models fail
+- **Consistent Results**: Deterministic calculation ensuring reproducible results
+- **Performance Logging**: Detailed logging of which models are used for transparency
 
 ## Output Format
 
@@ -689,6 +710,33 @@ This will test:
 - Summary generation with different configurations
 - Metric calculation
 - Service availability
+
+### Test Language-Specific Metrics
+
+Test the language-specific metrics calculation:
+
+```bash
+python test_language_metrics.py
+```
+
+This will test:
+- BERTScore calculation for Bengali, Nepali, Burmese, and Sinhala
+- ROUGE and BLEU scores for all languages
+- English fallback mechanism for unsupported languages
+- Metrics consistency across multiple runs
+
+### Test Queue Stopping
+
+Test the queue stopping functionality:
+
+```bash
+python test_stop_queue.py
+```
+
+This will test:
+- Starting and stopping queues
+- Graceful cancellation during processing
+- Queue state management
 
 ## Performance Considerations
 
