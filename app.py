@@ -296,13 +296,13 @@ def generate_summary_with_service(text: str, prompt_type: str, service_name: str
     
     try:
         if service_name == "openai" and openai_service.is_configured():
-            return openai_service.chat_completion(prompt, max_tokens=7000)
+            return openai_service.chat_completion(prompt)
         elif service_name == "anthropic" and anthropic_service.is_configured():
-            return anthropic_service.chat_completion(prompt, max_tokens=7000)
+            return anthropic_service.chat_completion(prompt)
         elif service_name == "deepseek" and deepseek_service.is_configured():
-            return deepseek_service.chat_completion(prompt, max_tokens=7000)
+            return deepseek_service.chat_completion(prompt)
         elif service_name == "bloomz" and bloomz_service.is_configured():
-            return bloomz_service.generate_text(prompt, max_length=7000)
+            return bloomz_service.generate_text(prompt)
         else:
             return f"Service {service_name} not configured or available"
     except Exception as e:

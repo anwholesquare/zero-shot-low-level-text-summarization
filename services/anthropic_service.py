@@ -15,7 +15,7 @@ class AnthropicService:
         self.client = anthropic.Anthropic(api_key=self.api_key) if self.api_key else None
     
     def chat_completion(self, prompt: str, model: str = "claude-3-haiku-20240307",
-                       max_tokens: int = 1000, temperature: float = 0.7) -> str:
+                       max_tokens: int = 7000, temperature: float = 0.7) -> str:
         """
         Generate chat completion using Anthropic Claude API
         

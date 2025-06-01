@@ -20,7 +20,7 @@ class DeepSeekService:
         } if self.api_key else None
     
     def chat_completion(self, prompt: str, model: str = "deepseek-chat",
-                       max_tokens: int = 1000, temperature: float = 0.7) -> str:
+                       max_tokens: int = 7000, temperature: float = 0.7) -> str:
         """
         Generate chat completion using DeepSeek API
         

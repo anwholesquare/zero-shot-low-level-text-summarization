@@ -55,7 +55,7 @@ class BloomzService:
             self.model = None
             self.pipeline = None
     
-    def generate_text(self, prompt: str, max_length: int = 100,
+    def generate_text(self, prompt: str, max_length: int = 7000,
                      temperature: float = 0.7, top_p: float = 0.9,
                      do_sample: bool = True, num_return_sequences: int = 1) -> str:
         """
