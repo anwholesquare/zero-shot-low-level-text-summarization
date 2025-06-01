@@ -29,7 +29,7 @@ class Config:
     # Model Configurations
     DEFAULT_MODELS = {
         'openai': 'gpt-3.5-turbo',
-        'anthropic': 'claude-3-haiku-20240307',
+        'anthropic': 'claude-3-5-haiku-20241022',
         'deepseek': 'deepseek-chat',
         'gemini': 'gemini-pro',
         'bloomz': 'bigscience/bloomz-560m'
@@ -123,7 +123,7 @@ class TestingConfig(Config):
     # Use smaller models for testing
     DEFAULT_MODELS = {
         'openai': 'gpt-3.5-turbo',
-        'anthropic': 'claude-3-haiku-20240307',
+        'anthropic': 'claude-3-5-haiku-20241022',
         'deepseek': 'deepseek-chat',
         'gemini': 'gemini-pro',
         'bloomz': 'bigscience/bloomz-560m'
