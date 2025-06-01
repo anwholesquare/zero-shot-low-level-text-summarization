@@ -14,7 +14,7 @@ class AnthropicService:
         
         self.client = anthropic.Anthropic(api_key=self.api_key) if self.api_key else None
     
-    def chat_completion(self, prompt: str, model: str = "claude-3-sonnet-20240229",
+    def chat_completion(self, prompt: str, model: str = "claude-3-haiku-20240307",
                        max_tokens: int = 1000, temperature: float = 0.7) -> str:
         """
         Generate chat completion using Anthropic Claude API
@@ -48,7 +48,7 @@ class AnthropicService:
             raise Exception(f"Anthropic API error: {str(e)}")
     
     def chat_with_system(self, prompt: str, system_prompt: str = "",
-                        model: str = "claude-3-sonnet-20240229",
+                        model: str = "claude-3-haiku-20240307",
                         max_tokens: int = 1000, temperature: float = 0.7) -> str:
         """
         Generate chat completion with system prompt using Anthropic Claude API
@@ -85,7 +85,7 @@ class AnthropicService:
             logger.error(f"Anthropic API error: {str(e)}")
             raise Exception(f"Anthropic API error: {str(e)}")
     
-    def stream_completion(self, prompt: str, model: str = "claude-3-sonnet-20240229",
+    def stream_completion(self, prompt: str, model: str = "claude-3-haiku-20240307",
                          max_tokens: int = 1000, temperature: float = 0.7):
         """
         Generate streaming chat completion using Anthropic Claude API

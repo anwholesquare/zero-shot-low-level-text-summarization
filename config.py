@@ -29,7 +29,7 @@ class Config:
     # Model Configurations
     DEFAULT_MODELS = {
         'openai': 'gpt-3.5-turbo',
-        'anthropic': 'claude-3-sonnet-20240229',
+        'anthropic': 'claude-3-haiku-20240307',
         'deepseek': 'deepseek-chat',
         'gemini': 'gemini-pro',
         'bloomz': 'bigscience/bloomz-560m'

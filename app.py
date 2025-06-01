@@ -63,17 +63,18 @@ os.makedirs('data/samples', exist_ok=True)
 os.makedirs('data/queues', exist_ok=True)
 os.makedirs('data/results', exist_ok=True)
 
-# Prompt templates for summarization
+# Prompt templates for summarization - Language-specific
 PROMPT_TEMPLATES = {
-    "direct": "Summarize the following text within 350 letters:\n\n{text}\n\nSummary:",
-    
-    "minimal_details": """Please provide a concise summary of the following text 350 letters. Focus on the main points and key information.
+    "bengali": {
+        "direct": "Summarize the following text in Bangla within 350 letters:\n\n{text}\n\nSummary:",
+        
+        "minimal_details": """Please provide a concise summary of the following text within 350 letters in Bangla. Focus on the main points and key information.
 
 Text: {text}
 
 Summary:""",
-    
-    "analytical_details": """Analyze the following text and provide a summary 350 letters that captures:
+        
+        "analytical_details": """Analyze the following text and provide a summary within 350 letters in Bangla that captures:
 1. Main topic and key points
 2. Important details and context
 3. Conclusions or outcomes mentioned
@@ -81,7 +82,105 @@ Summary:""",
 Text: {text}
 
 Detailed Summary:"""
+    },
+    
+    "nepali": {
+        "direct": "Summarize the following text in Nepali within 350 letters:\n\n{text}\n\nSummary:",
+        
+        "minimal_details": """Please provide a concise summary of the following text within 350 letters in Nepali. Focus on the main points and key information.
+
+Text: {text}
+
+Summary:""",
+        
+       "analytical_details": """Analyze the following text and provide a summary within 350 letters in Nepali that captures:
+1. Main topic and key points
+2. Important details and context
+3. Conclusions or outcomes mentioned
+
+Text: {text}
+
+Detailed Summary:"""
+    },
+    
+    "burmese": {
+        "direct": "Summarize the following text in Burmese within 350 letters:\n\n{text}\n\nSummary:",
+        
+        "minimal_details": """Please provide a concise summary of the following text within 350 letters in Burmese. Focus on the main points and key information.
+
+Text: {text}
+
+Summary:""",
+        
+       "analytical_details": """Analyze the following text and provide a summary within 350 letters in Burmese that captures:
+1. Main topic and key points
+2. Important details and context
+3. Conclusions or outcomes mentioned
+
+Text: {text}
+
+Detailed Summary:"""
+    },
+    
+    "sinhala": {
+        "direct": "Summarize the following text in Sinhala within 350 letters:\n\n{text}\n\nSummary:",
+        
+        "minimal_details": """Please provide a concise summary of the following text within 350 letters in Sinhala. Focus on the main points and key information.
+
+Text: {text}
+
+Summary:""",
+        
+        "analytical_details": """Analyze the following text and provide a summary within 350 letters in Sinhala that captures:
+1. Main topic and key points
+2. Important details and context
+3. Conclusions or outcomes mentioned
+
+Text: {text}
+
+Detailed Summary:"""
+    },
+    
+    # English fallback for any other languages
+    "english": {
+        "direct": "Summarize the following text within 350 letters:\n\n{text}\n\nSummary:",
+        
+        "minimal_details": """Please provide a concise summary of the following text within 350 letters. Focus on the main points and key information.
+
+Text: {text}
+
+Summary:""",
+        
+        "analytical_details": """Analyze the following text and provide a summary within 350 letters that captures:
+1. Main topic and key points
+2. Important details and context
+3. Conclusions or outcomes mentioned
+
+Text: {text}
+
+Detailed Summary:"""
+    }
 }
+
+def get_prompt_template(language: str, prompt_type: str) -> str:
+    """Get language-specific prompt template"""
+    # Map language names to template keys
+    lang_map = {
+        "bengali": "bengali",
+        "nepali": "nepali", 
+        "burmese": "burmese",
+        "sinhala": "sinhala"
+    }
+    
+    # Get the appropriate language key, fallback to English
+    lang_key = lang_map.get(language.lower(), "english")
+    
+    # Get the prompt template, fallback to direct if prompt_type not found
+    if lang_key in PROMPT_TEMPLATES and prompt_type in PROMPT_TEMPLATES[lang_key]:
+        return PROMPT_TEMPLATES[lang_key][prompt_type]
+    else:
+        # Fallback to English
+        return PROMPT_TEMPLATES["english"].get(prompt_type, PROMPT_TEMPLATES["english"]["direct"])
 
 def load_xlsum_languages():
     """Load XLSUM datasets from local JSONL files"""
@@ -191,9 +290,9 @@ def calculate_metrics(generated_summary: str, reference_summary: str, language: 
     
     return metrics
 
-def generate_summary_with_service(text: str, prompt_type: str, service_name: str) -> str:
-    """Generate summary using specified AI service"""
-    prompt = PROMPT_TEMPLATES[prompt_type].format(text=text)
+def generate_summary_with_service(text: str, prompt_type: str, service_name: str, language: str = "english") -> str:
+    """Generate summary using specified AI service with language-specific prompts"""
+    prompt = get_prompt_template(language, prompt_type).format(text=text)
     
     try:
         if service_name == "openai" and openai_service.is_configured():
@@ -328,7 +427,7 @@ def summarization_worker(queue_id: str, samples_file: str, service: str, batch_s
                 
                 # Generate summary
                 generated_summary = generate_summary_with_service(
-                    row['text'], prompt_type, service
+                    row['text'], prompt_type, service, row['language']
                 )
                 
                 # Calculate metrics
@@ -400,11 +499,25 @@ def summarization_worker(queue_id: str, samples_file: str, service: str, batch_s
 def home():
     """Health check endpoint"""
     return jsonify({
-        "message": "XLSUM Text Summarization API",
-        "version": "2.0.0",
+        "message": "XLSUM Text Summarization API with Language-Specific Prompts",
+        "version": "2.1.0",
         "supported_languages": ["bengali", "nepali", "burmese", "sinhala"],
+        "language_support": {
+            "bengali": "Native Bengali prompts (বাংলা)",
+            "nepali": "Native Nepali prompts (नेपाली)",
+            "burmese": "Native Burmese prompts (မြန်မာ)",
+            "sinhala": "Native Sinhala prompts (සිංහල)",
+            "fallback": "English prompts for unsupported languages"
+        },
         "available_services": ["openai", "anthropic", "deepseek", "bloomz"],
         "prompt_types": ["direct", "minimal_details", "analytical_details"],
+        "features": [
+            "Language-specific summarization prompts",
+            "Multi-language evaluation metrics",
+            "Queue-based background processing",
+            "Resume capability for interrupted jobs",
+            "Real-time progress monitoring"
+        ],
         "endpoints": {
             "health": "GET /",
             "test_services": "GET /api/test-services",
@@ -541,8 +654,10 @@ def generate_summaries():
         if language not in processed_datasets or processed_datasets[language] is None:
             return jsonify({"error": f"Dataset for {language} not loaded"}), 400
         
-        if prompt_type not in PROMPT_TEMPLATES:
-            return jsonify({"error": f"Invalid prompt type: {prompt_type}"}), 400
+        # Validate prompt type - check if it exists in any language template
+        valid_prompt_types = ["direct", "minimal_details", "analytical_details"]
+        if prompt_type not in valid_prompt_types:
+            return jsonify({"error": f"Invalid prompt_type: {prompt_type}. Valid types: {valid_prompt_types}"}), 400
         
         dataset = processed_datasets[language]
         end_index = min(start_index + batch_size, len(dataset))
@@ -554,7 +669,7 @@ def generate_summaries():
             
             # Generate summary
             generated_summary = generate_summary_with_service(
-                item['text'], prompt_type, service
+                item['text'], prompt_type, service, language
             )
             
             # Calculate metrics
@@ -616,7 +731,7 @@ def batch_process():
             for i, item in enumerate(dataset):
                 # Generate summary
                 generated_summary = generate_summary_with_service(
-                    item['text'], prompt_type, service
+                    item['text'], prompt_type, service, language
                 )
                 
                 # Calculate metrics
@@ -865,8 +980,10 @@ def summarize():
         if service not in ['openai', 'anthropic', 'deepseek', 'bloomz']:
             return jsonify({"error": f"Invalid service: {service}"}), 400
         
-        if prompt_type not in PROMPT_TEMPLATES:
-            return jsonify({"error": f"Invalid prompt_type: {prompt_type}"}), 400
+        # Validate prompt type - check if it exists in any language template
+        valid_prompt_types = ["direct", "minimal_details", "analytical_details"]
+        if prompt_type not in valid_prompt_types:
+            return jsonify({"error": f"Invalid prompt_type: {prompt_type}. Valid types: {valid_prompt_types}"}), 400
         
         # Find samples file if not provided
         if not samples_file:
