@@ -23,6 +23,7 @@ from services.openai_service import OpenAIService
 from services.anthropic_service import AnthropicService
 from services.deepseek_service import DeepSeekService
 from services.bloomz_service import BloomzService
+from services.gemini_service import GeminiService
 
 # Import evaluation metrics
 try:
@@ -46,6 +47,7 @@ openai_service = OpenAIService()
 anthropic_service = AnthropicService()
 deepseek_service = DeepSeekService()
 bloomz_service = BloomzService()
+gemini_service = GeminiService()
 
 # Global variables for dataset storage
 xlsum_datasets = {}
@@ -303,6 +305,8 @@ def generate_summary_with_service(text: str, prompt_type: str, service_name: str
             return deepseek_service.chat_completion(prompt)
         elif service_name == "bloomz" and bloomz_service.is_configured():
             return bloomz_service.generate_text(prompt)
+        elif service_name == "gemini" and gemini_service.is_configured():
+            return gemini_service.chat_completion(prompt)
         else:
             return f"Service {service_name} not configured or available"
     except Exception as e:
@@ -509,7 +513,7 @@ def home():
             "sinhala": "Native Sinhala prompts (සිංහල)",
             "fallback": "English prompts for unsupported languages"
         },
-        "available_services": ["openai", "anthropic", "deepseek", "bloomz"],
+        "available_services": ["openai", "anthropic", "deepseek", "bloomz", "gemini"],
         "prompt_types": ["direct", "minimal_details", "analytical_details"],
         "features": [
             "Language-specific summarization prompts",
@@ -855,7 +859,8 @@ def dataset_info():
             "openai": openai_service.is_configured(),
             "anthropic": anthropic_service.is_configured(),
             "deepseek": deepseek_service.is_configured(),
-            "bloomz": bloomz_service.is_configured()
+            "bloomz": bloomz_service.is_configured(),
+            "gemini": gemini_service.is_configured()
         }
     })
 
@@ -938,6 +943,24 @@ def test_services():
     except Exception as e:
         results['bloomz'] = {'status': 'error', 'error': str(e)}
     
+    # Test Gemini
+    try:
+        if gemini_service.is_configured():
+            start_time = datetime.now()
+            response = gemini_service.chat_completion(test_prompt, max_tokens=50)
+            end_time = datetime.now()
+            
+            results['gemini'] = {
+                'status': 'working' if response and len(response.strip()) > 0 else 'error',
+                'response_time': (end_time - start_time).total_seconds(),
+                'response_length': len(response) if response else 0,
+                'sample_response': response[:100] + "..." if response and len(response) > 100 else response
+            }
+        else:
+            results['gemini'] = {'status': 'not_configured', 'error': 'Missing API key'}
+    except Exception as e:
+        results['gemini'] = {'status': 'error', 'error': str(e)}
+    
     # Calculate summary
     working_count = sum(1 for result in results.values() if result.get('status') == 'working')
     total_count = len(results)
@@ -977,7 +1000,7 @@ def summarize():
         if lang not in ['bengali', 'nepali', 'burmese', 'sinhala']:
             return jsonify({"error": f"Invalid language: {lang}"}), 400
         
-        if service not in ['openai', 'anthropic', 'deepseek', 'bloomz']:
+        if service not in ['openai', 'anthropic', 'deepseek', 'bloomz', 'gemini']:
             return jsonify({"error": f"Invalid service: {service}"}), 400
         
         # Validate prompt type - check if it exists in any language template
@@ -1015,6 +1038,8 @@ def summarize():
             service_configured = deepseek_service.is_configured()
         elif service == "bloomz":
             service_configured = bloomz_service.is_configured()
+        elif service == "gemini":
+            service_configured = gemini_service.is_configured()
         
         if not service_configured:
             return jsonify({"error": f"Service {service} is not configured"}), 400

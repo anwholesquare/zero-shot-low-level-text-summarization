@@ -18,7 +18,7 @@ class GeminiService:
         else:
             self.configured = False
     
-    def chat_completion(self, prompt: str, model: str = "gemini-pro",
+    def chat_completion(self, prompt: str, model: str = "gemini-2.0-flash-lite",
                        max_tokens: int = 1000, temperature: float = 0.7) -> str:
         """
         Generate chat completion using Google Gemini API
@@ -61,7 +61,7 @@ class GeminiService:
             raise Exception(f"Gemini API error: {str(e)}")
     
     def chat_with_history(self, prompt: str, history: list = None,
-                         model: str = "gemini-pro", max_tokens: int = 1000,
+                         model: str = "gemini-2.0-flash-lite", max_tokens: int = 1000,
                          temperature: float = 0.7) -> str:
         """
         Generate chat completion with conversation history using Gemini API
@@ -108,7 +108,7 @@ class GeminiService:
             raise Exception(f"Gemini Chat API error: {str(e)}")
     
     def generate_with_image(self, prompt: str, image_path: str = None,
-                           model: str = "gemini-pro-vision", max_tokens: int = 1000,
+                           model: str = "gemini-2.0-flash-lite-vision", max_tokens: int = 1000,
                            temperature: float = 0.7) -> str:
         """
         Generate content with image input using Gemini Vision API
@@ -158,7 +158,7 @@ class GeminiService:
             logger.error(f"Gemini Vision API error: {str(e)}")
             raise Exception(f"Gemini Vision API error: {str(e)}")
     
-    def stream_completion(self, prompt: str, model: str = "gemini-pro",
+    def stream_completion(self, prompt: str, model: str = "gemini-2.0-flash-lite",
                          max_tokens: int = 1000, temperature: float = 0.7):
         """
         Generate streaming chat completion using Gemini API

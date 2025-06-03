@@ -31,7 +31,7 @@ class Config:
         'openai': 'gpt-3.5-turbo',
         'anthropic': 'claude-3-5-haiku-20241022',
         'deepseek': 'deepseek-chat',
-        'gemini': 'gemini-pro',
+        'gemini': 'gemini-2.0-flash-lite',
         'bloomz': 'bigscience/bloomz-560m'
     }
     
@@ -125,7 +125,7 @@ class TestingConfig(Config):
         'openai': 'gpt-3.5-turbo',
         'anthropic': 'claude-3-5-haiku-20241022',
         'deepseek': 'deepseek-chat',
-        'gemini': 'gemini-pro',
+        'gemini': 'gemini-2.0-flash-lite',
         'bloomz': 'bigscience/bloomz-560m'
     }
 

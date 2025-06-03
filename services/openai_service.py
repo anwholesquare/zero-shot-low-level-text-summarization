@@ -16,7 +16,7 @@ class OpenAIService:
         self.client = openai.OpenAI(api_key=self.api_key) if self.api_key else None
     
     def chat_completion(self, prompt: str, model: str = "gpt-4o-mini", 
-                       max_tokens: int = 10000, temperature: float = 0.7) -> str:
+                       max_tokens: int = 7000, temperature: float = 0.7) -> str:
         """
         Generate chat completion using OpenAI API
         

@@ -100,6 +100,7 @@ echo "OPENAI_API_KEY=your_openai_api_key_here" >> .env
 echo "ANTHROPIC_API_KEY=your_anthropic_api_key_here" >> .env
 echo "DEEPSEEK_API_KEY=your_deepseek_api_key_here" >> .env
 echo "DEEPSEEK_BASE_URL=https://api.deepseek.com/v1" >> .env
+echo "GEMINI_API_KEY=your_gemini_api_key_here" >> .env
 
 # Or edit .env manually with your preferred editor:
 # nano .env
@@ -837,6 +838,11 @@ The API supports resuming interrupted processing:
 1. Visit [DeepSeek Platform](https://platform.deepseek.com/)
 2. Create an account and generate an API key
 3. Add `DEEPSEEK_API_KEY=your_key` to `.env`
+
+### Google Gemini
+1. Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Create an account and generate an API key
+3. Add `GEMINI_API_KEY=your_key` to `.env`
 
 ### Bloomz (Local)
 No API key required - uses local Hugging Face transformers.

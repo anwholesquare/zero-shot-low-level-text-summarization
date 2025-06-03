@@ -6,6 +6,7 @@ matplotlib
 seaborn
 openai
 anthropic
+google-generativeai
 transformers
 torch
 rouge-score

@@ -111,7 +111,7 @@ class AIServicesAPITester:
         try:
             payload = {
                 "prompt": prompt,
-                "model": "gemini-pro",
+                "model": "gemini-2.0-flash-lite",
                 "max_tokens": 100,
                 "temperature": 0.7
             }
